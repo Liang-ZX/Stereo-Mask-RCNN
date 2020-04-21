@@ -31,10 +31,6 @@ class _StereoRCNN(nn.Module):
         # loss
         self.RCNN_loss_cls = 0
         self.RCNN_loss_bbox_left_right = 0
-        self.RCNN_loss_dis = 0
-        self.RCNN_loss_dim = 0
-        self.RCNN_loss_dim_orien = 0
-        self.RCNN_loss_kpts = 0
 
         self.maxpool2d = nn.MaxPool2d(1, stride=2)
         # define rpn
@@ -42,7 +38,6 @@ class _StereoRCNN(nn.Module):
         self.RCNN_proposal_target = _ProposalTargetLayer(self.n_classes)
 
         self.RCNN_roi_align = ROIAlign((cfg.POOLING_SIZE, cfg.POOLING_SIZE), 1.0/16.0, 0)
-        self.RCNN_roi_kpts_align = ROIAlign((cfg.POOLING_SIZE*2, cfg.POOLING_SIZE*2), 1.0/16.0, 0)
         
     def _init_weights(self):
         def normal_init(m, mean, stddev, truncated=False):
@@ -55,16 +50,6 @@ class _StereoRCNN(nn.Module):
             else:
                 m.weight.data.normal_(mean, stddev)
                 m.bias.data.zero_()
-
-        # custom weights initialization called on netG and netD
-        def weights_init(m, mean, stddev, truncated=False):
-            classname = m.__class__.__name__
-            if classname.find('Conv') != -1:
-                m.weight.data.normal_(0.0, 0.02)
-                m.bias.data.fill_(0)
-            elif classname.find('BatchNorm') != -1:
-                m.weight.data.normal_(1.0, 0.02)
-                m.bias.data.fill_(0)
 
         normal_init(self.RCNN_toplayer, 0, 0.01, cfg.TRAIN.TRUNCATED)
         normal_init(self.RCNN_smooth1, 0, 0.01, cfg.TRAIN.TRUNCATED)
@@ -79,10 +64,6 @@ class _StereoRCNN(nn.Module):
         normal_init(self.RCNN_rpn.RPN_bbox_pred_left_right, 0, 0.01, cfg.TRAIN.TRUNCATED)
         normal_init(self.RCNN_cls_score, 0, 0.01, cfg.TRAIN.TRUNCATED)
         normal_init(self.RCNN_bbox_pred, 0, 0.001, cfg.TRAIN.TRUNCATED)
-        normal_init(self.RCNN_dim_orien_pred, 0, 0.001, cfg.TRAIN.TRUNCATED)
-        normal_init(self.kpts_class, 0, 0.1, cfg.TRAIN.TRUNCATED)
-        weights_init(self.RCNN_top, 0, 0.01, cfg.TRAIN.TRUNCATED)
-        weights_init(self.RCNN_kpts, 0, 0.1, cfg.TRAIN.TRUNCATED)
 
     def create_architecture(self):
         self._init_modules()
@@ -140,16 +121,13 @@ class _StereoRCNN(nn.Module):
             
         return roi_pool_feat
 
-    def forward(self, im_left_data, im_right_data, im_info, gt_boxes_left, gt_boxes_right,\
-                gt_boxes_merge, gt_dim_orien, gt_kpts, num_boxes):
+    def forward(self, im_left_data, im_right_data, im_info, gt_boxes_left, gt_boxes_right, gt_boxes_merge, num_boxes):
         batch_size = im_left_data.size(0)
 
         im_info = im_info.data
         gt_boxes_left = gt_boxes_left.data
         gt_boxes_right = gt_boxes_right.data
         gt_boxes_merge = gt_boxes_merge.data
-        gt_dim_orien = gt_dim_orien.data
-        gt_kpts = gt_kpts.data
         num_boxes = num_boxes.data
 
         # feed left image data to base model to obtain base feature map
